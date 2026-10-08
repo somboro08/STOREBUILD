@@ -17,7 +17,7 @@ class _SearchScreenState extends State<SearchScreen> {
   String q = '';
   String? cat;
   String sort = 'pertinence';
-  RangeValues range = const RangeValues(0, 20000);
+  RangeValues range = RangeValues(0, 20000);
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +34,7 @@ class _SearchScreenState extends State<SearchScreen> {
         title: TextField(
           autofocus: true,
           onChanged: (v) => setState(() => q = v),
-          style: const TextStyle(fontSize: 17),
+          style: TextStyle(fontSize: 17),
           decoration: InputDecoration(
             hintText: widget.channel == null ? 'Rechercher un produit' : 'Rechercher dans ${widget.channel!.name}',
             border: InputBorder.none,
@@ -44,20 +44,20 @@ class _SearchScreenState extends State<SearchScreen> {
       body: Column(children: [
         SizedBox(
           height: 46,
-          child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), children: [
+          child: ListView(scrollDirection: Axis.horizontal, padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6), children: [
             _chip('Tous', cat == null, () => setState(() => cat = null)),
             for (final c in categories) _chip(c, cat == c, () => setState(() => cat = c)),
           ]),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 8, 0),
+          padding: EdgeInsets.fromLTRB(16, 0, 8, 0),
           child: Row(children: [
-            Expanded(child: Text('Prix : ${fmtInt(range.start.round())} – ${fmtInt(range.end.round())} FCFA', style: const TextStyle(color: C.sub, fontSize: 13))),
+            Expanded(child: Text('Prix : ${fmtInt(range.start.round())} – ${fmtInt(range.end.round())} FCFA', style: TextStyle(color: C.sub, fontSize: 13))),
             DropdownButton<String>(
               value: sort,
-              underline: const SizedBox(),
-              dropdownColor: const Color(0xFF111B21),
-              items: const [
+              underline: SizedBox(),
+              dropdownColor: C.menu,
+              items: [
                 DropdownMenuItem(value: 'pertinence', child: Text('Pertinence')),
                 DropdownMenuItem(value: 'asc', child: Text('Prix croissant')),
                 DropdownMenuItem(value: 'desc', child: Text('Prix décroissant')),
@@ -71,23 +71,23 @@ class _SearchScreenState extends State<SearchScreen> {
           activeColor: C.green,
           onChanged: (v) => setState(() => range = v),
         ),
-        const Divider(height: 1, color: C.divider),
+        Divider(height: 1, color: C.divider),
         Expanded(
           child: res.isEmpty
-              ? const Center(child: Text('Aucun produit trouvé', style: TextStyle(color: C.sub)))
+              ? Center(child: Text('Aucun produit trouvé', style: TextStyle(color: C.sub)))
               : ListView.builder(
                   itemCount: res.length,
                   itemBuilder: (_, i) {
                     final r = res[i];
                     return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                       leading: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: SizedBox(width: 64, height: 64, child: ProductImage(color: r.post.color, bytes: r.post.bytes)),
                       ),
-                      title: Text(r.post.title!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w500)),
-                      subtitle: Text('${r.channel.name} · ${r.post.category ?? 'Autres'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.sub, fontSize: 13)),
-                      trailing: Text('${fmtInt(r.post.price!)} F', style: const TextStyle(color: C.green, fontWeight: FontWeight.w700)),
+                      title: Text(r.post.title!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w500)),
+                      subtitle: Text('${r.channel.name} · ${r.post.category ?? 'Autres'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.sub, fontSize: 13)),
+                      trailing: Text('${fmtInt(r.post.price!)} F', style: TextStyle(color: C.green, fontWeight: FontWeight.w700)),
                       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(channel: r.channel, post: r.post))),
                     );
                   },
@@ -98,7 +98,7 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _chip(String label, bool sel, VoidCallback onTap) => Padding(
-        padding: const EdgeInsets.only(right: 8),
+        padding: EdgeInsets.only(right: 8),
         child: ChoiceChip(
           label: Text(label), selected: sel, onSelected: (_) => onTap(), showCheckmark: false,
           backgroundColor: C.chip, selectedColor: C.greenPill,

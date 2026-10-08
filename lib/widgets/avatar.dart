@@ -37,7 +37,7 @@ class ProductImage extends StatelessWidget {
       width: double.infinity,
       color: color,
       alignment: Alignment.center,
-      child: const Icon(Icons.image_outlined, size: 56, color: Colors.white38),
+      child: Icon(Icons.image_outlined, size: 56, color: Colors.white38),
     );
   }
 }

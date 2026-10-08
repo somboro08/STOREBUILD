@@ -1,7 +1,7 @@
-name: martistore
-description: Application de commerce pour stores (design inspiré des chaînes WhatsApp).
+name: whatstore
+description: Whatstore - achète et vends avec paiement mobile money.
 publish_to: none
-version: 0.2.0+1
+version: 0.4.0+1
 environment:
   sdk: ">=3.4.0 <4.0.0"
 dependencies:
@@ -9,5 +9,26 @@ dependencies:
     sdk: flutter
   google_fonts: ^6.2.1
   image_picker: ^1.1.2
+  shared_preferences: ^2.3.2
+dev_dependencies:
+  flutter_launcher_icons: ^0.14.1
+  flutter_native_splash: ^2.4.1
 flutter:
   uses-material-design: true
+  assets:
+    - assets/brand/
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/brand/icon.png
+  adaptive_icon_background: "#25D366"
+  adaptive_icon_foreground: assets/brand/icon_foreground.png
+  remove_alpha_ios: true
+
+flutter_native_splash:
+  color: "#0B141A"
+  image: assets/brand/icon_foreground.png
+  android_12:
+    color: "#0B141A"
+    image: assets/brand/icon_foreground.png

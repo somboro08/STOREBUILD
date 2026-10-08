@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'brand.dart';
 
 enum PostType { text, image, video }
 
@@ -8,15 +9,16 @@ const categories = ['Sacs', 'Fournitures scolaires', 'Chaussures', 'Électroniqu
 class Post {
   final String id;
   final PostType type;
-  final String time, text;
-  final String? title, quote, category;
-  final int? price; // FCFA
-  final List<String> reactions;
-  final int reactionCount, forwards;
-  final Color color;
-  final bool bold, sold;
-  final Uint8List? bytes; // image choisie par le vendeur
-  const Post({
+  final String time;
+  String text;
+  String? title, quote, category, myReaction;
+  int? price; // FCFA
+  List<String> reactions;
+  int reactionCount, forwards;
+  Color color;
+  bool bold, sold;
+  Uint8List? bytes; // image choisie par le vendeur
+  Post({
     required this.id,
     required this.type,
     required this.time,
@@ -25,14 +27,14 @@ class Post {
     this.quote,
     this.category,
     this.price,
-    this.reactions = const [],
+    List<String>? reactions,
     this.reactionCount = 0,
     this.forwards = 0,
     this.color = const Color(0xFF37474F),
     this.bold = false,
     this.sold = false,
     this.bytes,
-  });
+  }) : reactions = reactions ?? [];
   bool get isProduct => price != null && title != null && type != PostType.text;
 }
 
@@ -43,7 +45,8 @@ class Channel {
   final int unread;
   Color color;
   final bool mine;
-  bool followed;
+  bool followed, muted;
+  double storageMo;
   final List<Post> posts;
   Channel({
     required this.id,
@@ -61,6 +64,8 @@ class Channel {
     this.phone = '',
     this.mine = false,
     this.followed = true,
+    this.muted = false,
+    this.storageMo = 0,
   }) : posts = posts ?? [];
 }
 
@@ -85,7 +90,7 @@ const _hello =
     '👉CALAVI carrefour Bidossessi juste avant l\'ex supermarché Azima en prenant le trafic local directement kpota nous sommes dans la maison des entreprises portail bleu (maison de la banque ou là où on vend des carreaux ou objets de construction) en face de la boutique BAJAJ qui est avant ORCA DECO vous verrez mon affiche au dehors pour vous orienter ou mon enseigne en haut du portail😍 ( 0197669861 Appel direct uniquement)\n\n'
     '👉Sikecodji von mafri 4eme immeuble à droite vous verrez les enseignes la ( 01…';
 
-final allChannels = <Channel>[
+final _demoChannels = <Channel>[
   Channel(
     id: 'martistore',
     name: 'MARTISTORE OFFICIEL',
@@ -93,6 +98,8 @@ final allChannels = <Channel>[
     time: '15:53',
     created: '17/04/2025',
     followers: 99563,
+    muted: true,
+    storageMo: 16.0,
     description: 'Fournitures scolaires, sacs, chaussures et accessoires à petits prix. Pas de livraison, retrait en boutique.',
     category: 'Fournitures scolaires',
     zone: 'Calavi · Sikècodji · Porto-Novo',
@@ -158,3 +165,6 @@ final allChannels = <Channel>[
     ],
   ),
 ];
+
+/// Liste réelle des boutiques (vide si Brand.demoData = false).
+final allChannels = <Channel>[if (Brand.demoData) ..._demoChannels];

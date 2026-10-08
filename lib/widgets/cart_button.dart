@@ -15,9 +15,9 @@ class CartButton extends StatelessWidget {
             label: Text('${app.cartCount}'),
             backgroundColor: C.green,
             textColor: Colors.black,
-            child: const Icon(Icons.shopping_cart_outlined),
+            child: Icon(Icons.shopping_cart_outlined),
           ),
-          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CartScreen())),
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CartScreen())),
         ),
       );
 }
