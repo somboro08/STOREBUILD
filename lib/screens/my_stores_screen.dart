@@ -32,7 +32,7 @@ class MyStoresScreen extends StatelessWidget {
           return ListView(children: [
             for (final c in list)
               ListTile(
-                leading: ChannelAvatar(color: c.color, name: c.name),
+                leading: ChannelAvatar(color: c.color, name: c.name, bytes: c.logo, url: c.logoUrl),
                 title: Text(c.name, style: TextStyle(fontWeight: FontWeight.w500)),
                 subtitle: Text('${c.posts.where((p) => p.isProduct).length} produits · ${fmtInt(c.followers)} abonnés · ${app.sellerOrders(c).length} commandes', style: TextStyle(color: C.sub, fontSize: 13)),
                 trailing: Icon(Icons.chevron_right, color: C.sub),

@@ -1,7 +1,7 @@
 name: whatstore
 description: Whatstore - achète et vends avec paiement mobile money.
 publish_to: none
-version: 0.4.0+1
+version: 0.5.0+1
 environment:
   sdk: ">=3.4.0 <4.0.0"
 dependencies:
@@ -10,7 +10,17 @@ dependencies:
   google_fonts: ^6.2.1
   image_picker: ^1.1.2
   shared_preferences: ^2.3.2
+  path_provider: ^2.1.4
+  url_launcher: ^6.3.1
+  video_player: ^2.9.2
+  share_plus: ^10.1.4
+  gal: ^2.3.0
+  connectivity_plus: ^6.1.0
+  app_links: ^6.3.3
+  http: ^1.2.2
 dev_dependencies:
+  flutter_test:
+    sdk: flutter
   flutter_launcher_icons: ^0.14.1
   flutter_native_splash: ^2.4.1
 flutter:
@@ -20,7 +30,7 @@ flutter:
 
 flutter_launcher_icons:
   android: true
-  ios: false
+  ios: true
   image_path: assets/brand/icon.png
   adaptive_icon_background: "#25D366"
   adaptive_icon_foreground: assets/brand/icon_foreground.png

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
+import '../services/deep_link.dart';
 import '../state.dart';
 import '../theme.dart';
+import '../widgets/offline_banner.dart';
 import 'explore_screen.dart';
 import 'home_screen.dart';
 import 'orders_screen.dart';
 import 'profile_screen.dart';
 
-/// Coque principale : barre du bas (Actus, Explorer, Commandes, Profil).
+/// Coque principale : barre du bas (Boutiques, Explorer, Commandes, Profil) + bandeau hors-ligne.
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
   @override
@@ -15,10 +17,26 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int idx = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final l = app.pendingLink;
+      if (l != null) {
+        app.pendingLink = null;
+        openLink(l);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: idx, children: [HomeScreen(), ExploreScreen(), OrdersScreen(), ProfileScreen()]),
+      body: Column(children: [
+        OfflineBanner(),
+        Expanded(child: IndexedStack(index: idx, children: [HomeScreen(), ExploreScreen(), OrdersScreen(), ProfileScreen()])),
+      ]),
       bottomNavigationBar: ListenableBuilder(
         listenable: app,
         builder: (_, __) {

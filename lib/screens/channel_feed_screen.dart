@@ -1,17 +1,22 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data.dart';
 import '../state.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
 import '../widgets/cart_button.dart';
+import '../widgets/contact_buttons.dart';
 import '../widgets/helpers.dart';
 import '../widgets/post_bubble.dart';
+import '../widgets/verified_badge.dart';
 import 'channel_info_screen.dart';
 import 'media_viewer_screen.dart';
+import 'product_detail_screen.dart';
 import 'publish_product_screen.dart';
+import 'reviews_screen.dart';
 import 'search_screen.dart';
 
-/// Fil de publications d'une chaîne (store), filtrable par catégorie.
+/// Fil de publications d'une boutique, filtrable par catégorie, avec chargement progressif.
 class ChannelFeedScreen extends StatefulWidget {
   final Channel channel;
   const ChannelFeedScreen({super.key, required this.channel});
@@ -21,8 +26,15 @@ class ChannelFeedScreen extends StatefulWidget {
 
 class _ChannelFeedScreenState extends State<ChannelFeedScreen> {
   String? cat;
+  int shown = 40;
   final scroll = ScrollController();
   Channel get channel => widget.channel;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => app.markRead(channel));
+  }
 
   void _go(Widget w) => Navigator.push(context, MaterialPageRoute(builder: (_) => w));
 
@@ -32,8 +44,20 @@ class _ChannelFeedScreenState extends State<ChannelFeedScreen> {
         _go(ChannelInfoScreen(channel: channel));
       case 'search':
         _go(SearchScreen(channel: channel));
+      case 'contact':
+        showModalBottomSheet(
+          context: context,
+          backgroundColor: C.bubble,
+          builder: (_) => SafeArea(child: Padding(padding: EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('Contacter ${channel.name}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+            SizedBox(height: 14),
+            ContactButtons(phone: channel.phone, message: 'Bonjour, je vous contacte depuis Whatstore.'),
+          ]))),
+        );
+      case 'reviews':
+        _go(ReviewsScreen(channel: channel));
       case 'share':
-        copyLink(context, 's/${channel.id}');
+        shareLink(context, 's/${channel.id}', message: channel.name);
       case 'media':
         if (await confirmDialog(context, 'Effacer les fichiers médias ?', 'Les fichiers téléchargés de cette boutique seront supprimés de ton téléphone.', ok: 'Effacer', danger: true)) {
           app.clearStorage(channel);
@@ -60,9 +84,12 @@ class _ChannelFeedScreenState extends State<ChannelFeedScreen> {
       listenable: app,
       builder: (context, _) {
         final k = channel.followers >= 1000 ? '${(channel.followers / 1000).round()} K' : '${channel.followers}';
+        final rating = app.ratingOf(channel);
         final cats = <String>{for (final p in channel.posts) if (p.category != null) p.category!}.toList();
         if (cat != null && !cats.contains(cat)) cat = null;
-        final posts = cat == null ? channel.posts : channel.posts.where((p) => p.category == cat).toList();
+        final all = cat == null ? channel.posts : channel.posts.where((p) => p.category == cat).toList();
+        final start = max(0, all.length - shown);
+        final posts = all.sublist(start);
         return Scaffold(
           appBar: AppBar(
             titleSpacing: 0,
@@ -70,12 +97,12 @@ class _ChannelFeedScreenState extends State<ChannelFeedScreen> {
               behavior: HitTestBehavior.opaque,
               onTap: () => _go(ChannelInfoScreen(channel: channel)),
               child: Row(children: [
-                ChannelAvatar(color: channel.color, name: channel.name, size: 40),
+                ChannelAvatar(color: channel.color, name: channel.name, bytes: channel.logo, url: channel.logoUrl, size: 40),
                 SizedBox(width: 12),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(channel.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
-                    Text('$k abonnés', style: TextStyle(fontSize: 12.5, color: C.sub)),
+                    Align(alignment: Alignment.centerLeft, child: ChannelTitle(channel, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500))),
+                    Text('$k abonnés${rating != null ? ' · ★ ${rating.toStringAsFixed(1)}' : ''}', style: TextStyle(fontSize: 12.5, color: C.sub)),
                   ]),
                 ),
               ]),
@@ -97,6 +124,8 @@ class _ChannelFeedScreenState extends State<ChannelFeedScreen> {
                 itemBuilder: (_) => [
                   PopupMenuItem(value: 'infos', height: 48, child: Text('Infos de la boutique')),
                   PopupMenuItem(value: 'search', height: 48, child: Text('Rechercher')),
+                  if (!channel.mine && channel.phone.isNotEmpty) PopupMenuItem(value: 'contact', height: 48, child: Text('Contacter le vendeur')),
+                  PopupMenuItem(value: 'reviews', height: 48, child: Text('Avis')),
                   PopupMenuItem(value: 'share', height: 48, child: Text('Partager')),
                   PopupMenuItem(value: 'media', height: 48, child: Text('Effacer les fichiers médias')),
                   PopupMenuItem(value: 'shortcut', height: 48, child: Text(app.pinned.contains(channel.id) ? 'Retirer le raccourci' : 'Ajouter un raccourci')),
@@ -121,9 +150,12 @@ class _ChannelFeedScreenState extends State<ChannelFeedScreen> {
                   : ListView.builder(
                       controller: scroll,
                       padding: EdgeInsets.only(top: 6, bottom: 90),
-                      itemCount: posts.length,
+                      itemCount: posts.length + (start > 0 ? 1 : 0),
                       itemBuilder: (_, i) {
-                        final p = posts[i];
+                        if (start > 0 && i == 0) {
+                          return Center(child: TextButton(onPressed: () => setState(() => shown += 40), child: Text('Voir les messages précédents', style: TextStyle(color: C.link))));
+                        }
+                        final p = posts[i - (start > 0 ? 1 : 0)];
                         return GestureDetector(
                           onLongPress: () => showPostOptions(context, channel, p),
                           child: PostBubble(
@@ -131,8 +163,11 @@ class _ChannelFeedScreenState extends State<ChannelFeedScreen> {
                             channelName: channel.name,
                             onTapMedia: () => _go(MediaViewerScreen(channel: channel, post: p)),
                             onAddToCart: () {
-                              app.addToCart(channel, p);
-                              toast(context, 'Ajouté au panier');
+                              if (p.variants.isNotEmpty) {
+                                _go(ProductDetailScreen(channel: channel, post: p));
+                                return;
+                              }
+                              toast(context, app.addToCart(channel, p) ? 'Ajouté au panier' : 'Stock limité');
                             },
                           ),
                         );

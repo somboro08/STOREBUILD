@@ -5,11 +5,14 @@ class ChannelAvatar extends StatelessWidget {
   final Color color;
   final double size;
   final String name;
-  const ChannelAvatar({super.key, required this.color, required this.name, this.size = 52});
+  final Uint8List? bytes;
+  final String? url;
+  const ChannelAvatar({super.key, required this.color, required this.name, this.size = 52, this.bytes, this.url});
+
   @override
   Widget build(BuildContext context) {
     final light = color.computeLuminance() > .6;
-    return Container(
+    final letter = Container(
       width: size,
       height: size,
       alignment: Alignment.center,
@@ -17,27 +20,41 @@ class ChannelAvatar extends StatelessWidget {
       child: Text(name.isEmpty ? '' : name[0].toUpperCase(),
           style: TextStyle(fontSize: size * .42, fontWeight: FontWeight.w600, color: light ? Colors.black87 : Colors.white)),
     );
+    if (bytes != null) return ClipOval(child: Image.memory(bytes!, width: size, height: size, fit: BoxFit.cover));
+    if (url != null) {
+      return ClipOval(child: Image.network(url!, width: size, height: size, fit: BoxFit.cover, errorBuilder: (_, __, ___) => letter));
+    }
+    return letter;
   }
 }
 
-/// Image produit : photo choisie par le vendeur, sinon placeholder coloré.
-/// Pour une API : remplacer par Image.network(url).
+/// Image produit : photo locale, sinon URL (API), sinon placeholder coloré.
 class ProductImage extends StatelessWidget {
   final Color color;
   final double? height;
   final Uint8List? bytes;
-  const ProductImage({super.key, required this.color, this.height, this.bytes});
+  final String? url;
+  final BoxFit fit;
+  const ProductImage({super.key, required this.color, this.height, this.bytes, this.url, this.fit = BoxFit.cover});
+
   @override
   Widget build(BuildContext context) {
-    if (bytes != null) {
-      return SizedBox(height: height, width: double.infinity, child: Image.memory(bytes!, fit: BoxFit.cover));
-    }
-    return Container(
+    final placeholder = Container(
       height: height,
       width: double.infinity,
       color: color,
       alignment: Alignment.center,
       child: Icon(Icons.image_outlined, size: 56, color: Colors.white38),
     );
+    if (bytes != null) return SizedBox(height: height, width: double.infinity, child: Image.memory(bytes!, fit: fit));
+    if (url != null) {
+      return SizedBox(
+        height: height,
+        width: double.infinity,
+        child: Image.network(url!, fit: fit, errorBuilder: (_, __, ___) => placeholder,
+            loadingBuilder: (c, child, p) => p == null ? child : Container(color: color, alignment: Alignment.center, child: CircularProgressIndicator(strokeWidth: 2))),
+      );
+    }
+    return placeholder;
   }
 }

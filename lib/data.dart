@@ -6,18 +6,38 @@ enum PostType { text, image, video }
 
 const categories = ['Sacs', 'Fournitures scolaires', 'Chaussures', 'Électronique', 'Maison', 'Mode', 'Beauté', 'Alimentation', 'Autres'];
 
+/// Accès aux fichiers médias (images/vidéos). Implémenté par LocalStore ; NoMediaIO pour les envois API.
+abstract class MediaIO {
+  String? saveImage(String name, Uint8List? bytes);
+  Uint8List? loadImage(String? name);
+  String? importFile(String name, String srcPath);
+  String mediaPath(String name);
+}
+
+class NoMediaIO implements MediaIO {
+  @override
+  String? saveImage(String name, Uint8List? bytes) => null;
+  @override
+  Uint8List? loadImage(String? name) => null;
+  @override
+  String? importFile(String name, String srcPath) => null;
+  @override
+  String mediaPath(String name) => name;
+}
+
 class Post {
   final String id;
   final PostType type;
   final String time;
   String text;
-  String? title, quote, category, myReaction;
-  int? price; // FCFA
-  List<String> reactions;
+  String? title, quote, category, myReaction, imageUrl, videoUrl, videoPath;
+  int? price, stock; // FCFA ; stock null = illimité
+  List<String> reactions, variants, extraUrls;
   int reactionCount, forwards;
   Color color;
   bool bold, sold;
-  Uint8List? bytes; // image choisie par le vendeur
+  Uint8List? bytes; // image de couverture
+  List<Uint8List> extra; // images supplémentaires
   Post({
     required this.id,
     required this.type,
@@ -27,26 +47,68 @@ class Post {
     this.quote,
     this.category,
     this.price,
+    this.stock,
     List<String>? reactions,
+    List<String>? variants,
+    List<String>? extraUrls,
+    List<Uint8List>? extra,
     this.reactionCount = 0,
     this.forwards = 0,
     this.color = const Color(0xFF37474F),
     this.bold = false,
     this.sold = false,
     this.bytes,
-  }) : reactions = reactions ?? [];
+    this.imageUrl,
+    this.videoUrl,
+    this.videoPath,
+  })  : reactions = reactions ?? [],
+        variants = variants ?? [],
+        extraUrls = extraUrls ?? [],
+        extra = extra ?? [];
+
   bool get isProduct => price != null && title != null && type != PostType.text;
+  bool get hasVideo => videoPath != null || videoUrl != null;
+  List<Uint8List> get allImages => [if (bytes != null) bytes!, ...extra];
+  int get imageCount => (bytes != null || imageUrl != null ? 1 : 0) + (extra.isNotEmpty ? extra.length : extraUrls.length);
+
+  Map<String, dynamic> toJson(MediaIO io) => {
+        'id': id, 'type': type.index, 'time': time, 'text': text, 'title': title, 'quote': quote,
+        'category': category, 'price': price, 'stock': stock, 'variants': variants,
+        'reactions': reactions, 'rc': reactionCount, 'fw': forwards, 'color': color.value,
+        'bold': bold, 'sold': sold, 'mine': myReaction,
+        'img': io.saveImage('${id}_0', bytes),
+        'extra': [for (var i = 0; i < extra.length; i++) io.saveImage('${id}_${i + 1}', extra[i])],
+        'imageUrl': imageUrl, 'extraUrls': extraUrls, 'videoUrl': videoUrl,
+        'video': videoPath?.split('/').last,
+      };
+
+  factory Post.fromJson(Map<String, dynamic> j, MediaIO io) {
+    final extraList = <Uint8List>[];
+    for (final n in (j['extra'] as List? ?? [])) {
+      final b = io.loadImage(n as String?);
+      if (b != null) extraList.add(b);
+    }
+    return Post(
+      id: j['id'], type: PostType.values[j['type'] ?? 0], time: j['time'] ?? '', text: j['text'] ?? '',
+      title: j['title'], quote: j['quote'], category: j['category'], price: j['price'], stock: j['stock'],
+      variants: List<String>.from(j['variants'] ?? []), reactions: List<String>.from(j['reactions'] ?? []),
+      reactionCount: j['rc'] ?? 0, forwards: j['fw'] ?? 0, color: Color(j['color'] ?? 0xFF37474F),
+      bold: j['bold'] ?? false, sold: j['sold'] ?? false, bytes: io.loadImage(j['img']), extra: extraList,
+      imageUrl: j['imageUrl'], extraUrls: List<String>.from(j['extraUrls'] ?? []), videoUrl: j['videoUrl'],
+      videoPath: j['video'] == null ? null : io.mediaPath(j['video']),
+    )..myReaction = j['mine'];
+  }
 }
 
 class Channel {
-  final String id, created;
-  String name, description, category, zone, phone, preview, time;
-  int followers;
-  final int unread;
+  final String id;
+  String created, name, description, category, zone, phone, preview, time;
+  int followers, unread, deliveryFee;
   Color color;
-  final bool mine;
-  bool followed, muted;
+  bool mine, followed, muted, verified, delivers;
   double storageMo;
+  Uint8List? logo;
+  String? logoUrl, ownerPhone;
   final List<Post> posts;
   Channel({
     required this.id,
@@ -66,7 +128,45 @@ class Channel {
     this.followed = true,
     this.muted = false,
     this.storageMo = 0,
+    this.verified = false,
+    this.delivers = false,
+    this.deliveryFee = 0,
+    this.logo,
+    this.logoUrl,
+    this.ownerPhone,
   }) : posts = posts ?? [];
+
+  Map<String, dynamic> toJson(MediaIO io, {bool withPosts = true}) => {
+        'id': id, 'name': name, 'description': description, 'category': category, 'zone': zone, 'phone': phone,
+        'preview': preview, 'time': time, 'created': created, 'followers': followers, 'unread': unread,
+        'color': color.value, 'mine': mine, 'followed': followed, 'muted': muted, 'storageMo': storageMo,
+        'verified': verified, 'delivers': delivers, 'deliveryFee': deliveryFee, 'ownerPhone': ownerPhone,
+        'logo': io.saveImage('logo_$id', logo), 'logoUrl': logoUrl,
+        if (withPosts) 'posts': [for (final p in posts) p.toJson(io)],
+      };
+
+  factory Channel.fromJson(Map<String, dynamic> j, MediaIO io) => Channel(
+        id: j['id'], name: j['name'] ?? '', description: j['description'] ?? '', category: j['category'] ?? '',
+        zone: j['zone'] ?? '', phone: j['phone'] ?? '', preview: j['preview'] ?? '', time: j['time'] ?? '',
+        created: j['created'] ?? '', followers: j['followers'] ?? 0, unread: j['unread'] ?? 0,
+        color: Color(j['color'] ?? 0xFF455A64), mine: j['mine'] ?? false, followed: j['followed'] ?? true,
+        muted: j['muted'] ?? false, storageMo: (j['storageMo'] ?? 0).toDouble(), verified: j['verified'] ?? false,
+        delivers: j['delivers'] ?? false, deliveryFee: j['deliveryFee'] ?? 0, ownerPhone: j['ownerPhone'],
+        logo: io.loadImage(j['logo']), logoUrl: j['logoUrl'],
+        posts: [for (final p in (j['posts'] as List? ?? [])) Post.fromJson(Map<String, dynamic>.from(p), io)],
+      );
+}
+
+/// Minuscules sans accents, pour des recherches tolérantes.
+String normalizeText(String s) {
+  const from = 'àâäáãåçéèêëíìîïñóòôöõúùûüýÿœæ';
+  const to = 'aaaaaaceeeeiiiinooooouuuuyyoa';
+  final b = StringBuffer();
+  for (final ch in s.toLowerCase().split('')) {
+    final i = from.indexOf(ch);
+    b.write(i < 0 ? ch : to[i]);
+  }
+  return b.toString();
 }
 
 String nowHm() {
@@ -98,6 +198,8 @@ final _demoChannels = <Channel>[
     time: '15:53',
     created: '17/04/2025',
     followers: 99563,
+    phone: '+22901000000',
+    verified: true,
     muted: true,
     storageMo: 16.0,
     description: 'Fournitures scolaires, sacs, chaussures et accessoires à petits prix. Pas de livraison, retrait en boutique.',
@@ -146,7 +248,7 @@ final _demoChannels = <Channel>[
   Channel(id: 'netflix', name: 'Netflix', preview: 'NVR TOO LATE CUB 🥵🥵🥵🥵 AWW…', time: '29/09/2026', followers: 500000, unread: 56, color: Color(0xFF000000)),
   Channel(
     id: 'techbj', name: 'TechShop Cotonou', preview: 'Chargeur rapide 20W original 3000f ⚡', time: '10:20', followers: 3200,
-    color: const Color(0xFF1565C0), followed: false, category: 'Électronique', zone: 'Cotonou · Ganhi',
+    color: const Color(0xFF1565C0), followed: false, category: 'Électronique', phone: '+22901000001', verified: true, delivers: true, deliveryFee: 1000, zone: 'Cotonou · Ganhi',
     description: 'Accessoires téléphone, écouteurs, chargeurs.',
     posts: [
       Post(id: 't1', type: PostType.image, time: '10:12', color: Color(0xFF283593), title: 'Écouteurs Bluetooth', price: 4500, category: 'Électronique',
@@ -157,7 +259,7 @@ final _demoChannels = <Channel>[
   ),
   Channel(
     id: 'mode', name: 'Mode Africaine', preview: 'Pagne wax 6 yards 5000f', time: '09:05', followers: 8700,
-    color: const Color(0xFFAD1457), followed: false, category: 'Mode', zone: 'Cotonou · Dantokpa',
+    color: const Color(0xFFAD1457), followed: false, category: 'Mode', phone: '+22901000002', delivers: true, deliveryFee: 1500, zone: 'Cotonou · Dantokpa',
     description: 'Pagnes, tenues et accessoires de mode.',
     posts: [
       Post(id: 'm1', type: PostType.image, time: '09:05', color: Color(0xFFEF6C00), title: 'Pagne wax 6 yards', price: 5000, category: 'Mode',

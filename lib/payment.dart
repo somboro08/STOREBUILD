@@ -1,5 +1,4 @@
-/// Couche paiement mobile money. Remplace [MockPaymentService] par un appel à ton API
-/// (FedaPay, Kkiapay, ton orchestrateur de paiements...). Le reste de l'app n'a pas à changer.
+/// Couche paiement mobile money. En mode API, remplacé par ApiPaymentService (voir services/services.dart).
 class PaymentRequest {
   final String provider, phone, reference;
   final int amount; // FCFA
@@ -14,6 +13,7 @@ class PaymentResult {
 
 abstract class PaymentService {
   Future<PaymentResult> pay(PaymentRequest r);
+  Future<PaymentResult> refund(PaymentRequest r);
 }
 
 class MockPaymentService implements PaymentService {
@@ -21,6 +21,12 @@ class MockPaymentService implements PaymentService {
   Future<PaymentResult> pay(PaymentRequest r) async {
     await Future.delayed(const Duration(seconds: 2));
     return r.phone.length >= 8 ? const PaymentResult(true) : const PaymentResult(false, 'Numéro invalide');
+  }
+
+  @override
+  Future<PaymentResult> refund(PaymentRequest r) async {
+    await Future.delayed(const Duration(seconds: 1));
+    return const PaymentResult(true);
   }
 }
 

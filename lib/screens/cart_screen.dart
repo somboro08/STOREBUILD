@@ -27,7 +27,7 @@ class CartScreen extends StatelessWidget {
                   Padding(
                     padding: EdgeInsets.fromLTRB(16, 14, 16, 4),
                     child: Row(children: [
-                      ChannelAvatar(color: s.color, name: s.name, size: 26),
+                      ChannelAvatar(color: s.color, name: s.name, bytes: s.logo, url: s.logoUrl, size: 26),
                       SizedBox(width: 8),
                       Text(s.name, style: TextStyle(fontWeight: FontWeight.w600)),
                     ]),
@@ -36,10 +36,10 @@ class CartScreen extends StatelessWidget {
                     ListTile(
                       leading: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: SizedBox(width: 56, height: 56, child: ProductImage(color: l.post.color, bytes: l.post.bytes)),
+                        child: SizedBox(width: 56, height: 56, child: ProductImage(color: l.post.color, bytes: l.post.bytes, url: l.post.imageUrl)),
                       ),
                       title: Text(l.post.title!, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text('${fmtInt(l.post.price!)} F × ${l.qty} = ${fmtInt(l.total)} F', style: TextStyle(color: C.green, fontSize: 13)),
+                      subtitle: Text('${l.variant.isEmpty ? '' : '${l.variant} · '}${fmtInt(l.post.price!)} F × ${l.qty} = ${fmtInt(l.total)} F', style: TextStyle(color: C.green, fontSize: 13)),
                       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                         IconButton(icon: Icon(Icons.remove_circle_outline), onPressed: () => app.setQty(l, l.qty - 1)),
                         Text('${l.qty}', style: TextStyle(fontWeight: FontWeight.w600)),

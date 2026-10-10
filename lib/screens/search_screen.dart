@@ -5,15 +5,16 @@ import '../theme.dart';
 import '../widgets/avatar.dart';
 import 'product_detail_screen.dart';
 
-/// Recherche de produits avec filtres : texte, catégorie, prix, tri.
+/// Recherche de produits : texte (sans accents), catégorie, prix, tri, historique.
 class SearchScreen extends StatefulWidget {
-  final Channel? channel; // si renseigné : recherche limitée à ce store
+  final Channel? channel;
   const SearchScreen({super.key, this.channel});
   @override
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
 class _SearchScreenState extends State<SearchScreen> {
+  final ctrl = TextEditingController();
   String q = '';
   String? cat;
   String sort = 'pertinence';
@@ -21,10 +22,10 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final n = normalizeText(q);
     final res = app.products(widget.channel).where((r) {
       final p = r.post;
-      final hay = '${p.title} ${p.text} ${p.category}'.toLowerCase();
-      return hay.contains(q.toLowerCase()) && (cat == null || p.category == cat) && p.price! >= range.start && p.price! <= range.end;
+      return normalizeText('${p.title} ${p.text} ${p.category}').contains(n) && (cat == null || p.category == cat) && p.price! >= range.start && (range.end >= 20000 || p.price! <= range.end);
     }).toList();
     if (sort == 'asc') res.sort((a, b) => a.post.price!.compareTo(b.post.price!));
     if (sort == 'desc') res.sort((a, b) => b.post.price!.compareTo(a.post.price!));
@@ -32,16 +33,33 @@ class _SearchScreenState extends State<SearchScreen> {
       appBar: AppBar(
         titleSpacing: 0,
         title: TextField(
+          controller: ctrl,
           autofocus: true,
+          textInputAction: TextInputAction.search,
           onChanged: (v) => setState(() => q = v),
+          onSubmitted: app.addSearch,
           style: TextStyle(fontSize: 17),
-          decoration: InputDecoration(
-            hintText: widget.channel == null ? 'Rechercher un produit' : 'Rechercher dans ${widget.channel!.name}',
-            border: InputBorder.none,
-          ),
+          decoration: InputDecoration(hintText: widget.channel == null ? 'Rechercher un produit' : 'Rechercher dans ${widget.channel!.name}', border: InputBorder.none),
         ),
       ),
       body: Column(children: [
+        if (q.isEmpty && app.searchHistory.isNotEmpty)
+          Padding(
+            padding: EdgeInsets.fromLTRB(16, 8, 8, 0),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [Expanded(child: Text('Recherches récentes', style: TextStyle(color: C.sub, fontSize: 13))), TextButton(onPressed: app.clearSearchHistory, child: Text('Effacer', style: TextStyle(color: C.link)))]),
+              Wrap(spacing: 8, children: [
+                for (final h in app.searchHistory)
+                  ActionChip(
+                    label: Text(h), backgroundColor: C.chip,
+                    onPressed: () => setState(() {
+                      q = h;
+                      ctrl.text = h;
+                    }),
+                  ),
+              ]),
+            ]),
+          ),
         SizedBox(
           height: 46,
           child: ListView(scrollDirection: Axis.horizontal, padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6), children: [
@@ -52,7 +70,7 @@ class _SearchScreenState extends State<SearchScreen> {
         Padding(
           padding: EdgeInsets.fromLTRB(16, 0, 8, 0),
           child: Row(children: [
-            Expanded(child: Text('Prix : ${fmtInt(range.start.round())} – ${fmtInt(range.end.round())} FCFA', style: TextStyle(color: C.sub, fontSize: 13))),
+            Expanded(child: Text('Prix : ${fmtInt(range.start.round())} – ${range.end >= 20000 ? '20 000+' : fmtInt(range.end.round())} FCFA', style: TextStyle(color: C.sub, fontSize: 13))),
             DropdownButton<String>(
               value: sort,
               underline: SizedBox(),
@@ -66,11 +84,7 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
           ]),
         ),
-        RangeSlider(
-          values: range, min: 0, max: 20000, divisions: 40,
-          activeColor: C.green,
-          onChanged: (v) => setState(() => range = v),
-        ),
+        RangeSlider(values: range, min: 0, max: 20000, divisions: 40, activeColor: C.green, onChanged: (v) => setState(() => range = v)),
         Divider(height: 1, color: C.divider),
         Expanded(
           child: res.isEmpty
@@ -81,14 +95,14 @@ class _SearchScreenState extends State<SearchScreen> {
                     final r = res[i];
                     return ListTile(
                       contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                      leading: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: SizedBox(width: 64, height: 64, child: ProductImage(color: r.post.color, bytes: r.post.bytes)),
-                      ),
+                      leading: ClipRRect(borderRadius: BorderRadius.circular(8), child: SizedBox(width: 64, height: 64, child: ProductImage(color: r.post.color, bytes: r.post.bytes, url: r.post.imageUrl))),
                       title: Text(r.post.title!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w500)),
-                      subtitle: Text('${r.channel.name} · ${r.post.category ?? 'Autres'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.sub, fontSize: 13)),
+                      subtitle: Text('${r.channel.name} · ${r.post.category ?? 'Autres'}${r.post.sold ? ' · Terminé' : ''}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.sub, fontSize: 13)),
                       trailing: Text('${fmtInt(r.post.price!)} F', style: TextStyle(color: C.green, fontWeight: FontWeight.w700)),
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(channel: r.channel, post: r.post))),
+                      onTap: () {
+                        app.addSearch(q);
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(channel: r.channel, post: r.post)));
+                      },
                     );
                   },
                 ),

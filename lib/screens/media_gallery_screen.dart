@@ -27,7 +27,7 @@ class MediaGalleryScreen extends StatelessWidget {
                     for (final p in media)
                       GestureDetector(
                         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaViewerScreen(channel: channel, post: p))),
-                        child: ProductImage(color: p.color, bytes: p.bytes),
+                        child: ProductImage(color: p.color, bytes: p.bytes, url: p.imageUrl),
                       ),
                   ],
                 ),

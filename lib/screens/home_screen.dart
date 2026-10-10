@@ -9,6 +9,7 @@ import 'create_store_screen.dart';
 import 'explore_screen.dart';
 import 'favorites_screen.dart';
 import 'my_stores_screen.dart';
+import 'notifications_screen.dart';
 import 'publish_product_screen.dart';
 import 'search_screen.dart';
 
@@ -25,6 +26,14 @@ class HomeScreen extends StatelessWidget {
         title: Text('Boutiques', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w400)),
         actions: [
           CartButton(),
+          ListenableBuilder(
+            listenable: app,
+            builder: (_, __) => IconButton(
+              tooltip: 'Notifications',
+              icon: Badge(isLabelVisible: app.unreadNotices > 0, label: Text('${app.unreadNotices}'), backgroundColor: C.green, textColor: Colors.black, child: Icon(Icons.notifications_none)),
+              onPressed: () => _go(context, NotificationsScreen()),
+            ),
+          ),
           IconButton(icon: Icon(Icons.search), tooltip: 'Rechercher un produit', onPressed: () => _go(context, SearchScreen())),
           PopupMenuButton<String>(
             icon: Icon(Icons.more_vert),
@@ -94,7 +103,7 @@ class HomeScreen extends StatelessWidget {
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         child: Row(children: [
-          ChannelAvatar(color: ch.color, name: ch.name, size: 52),
+          ChannelAvatar(color: ch.color, name: ch.name, bytes: ch.logo, url: ch.logoUrl, size: 52),
           SizedBox(width: 14),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

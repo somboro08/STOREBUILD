@@ -110,7 +110,7 @@ class PostBubble extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(11),
         child: Stack(alignment: Alignment.center, children: [
-          ProductImage(color: post.color, bytes: post.bytes, height: video ? 360 : 200),
+          ProductImage(color: post.color, bytes: post.bytes, url: post.imageUrl, height: video ? 360 : 200),
           if (video)
             Container(
               width: 54, height: 54,
@@ -126,6 +126,15 @@ class PostBubble extends StatelessWidget {
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Icon(Icons.file_download_outlined, size: 16), SizedBox(width: 4), Text('6,1 Mo', style: TextStyle(fontSize: 12.5)),
                 ]),
+              ),
+            ),
+          if (post.imageCount > 1)
+            Positioned(
+              top: 8, right: 8,
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: Color(0x99000000), borderRadius: BorderRadius.circular(12)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.collections_outlined, size: 14, color: Colors.white), SizedBox(width: 4), Text('${post.imageCount}', style: TextStyle(color: Colors.white, fontSize: 12))]),
               ),
             ),
           if (post.sold)
