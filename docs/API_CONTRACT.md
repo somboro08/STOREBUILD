@@ -1,6 +1,6 @@
 # Contrat API Whatstore
 
-L'app tourne 100 % en local tant que `Brand.apiBaseUrl` (lib/brand.dart) est vide.
+L'app tourne 100 % en local tant que `Brand.apiBaseUrl` (`frontend/lib/brand.dart`) est vide.
 Pour passer en mode API : `static const apiBaseUrl = 'https://api.whatstore.store';` — rien d'autre à changer.
 
 Principe : **offline-first**. Chaque action est appliquée localement puis ajoutée à une file d'opérations (`SyncOp`).
@@ -48,7 +48,7 @@ Codes : 2xx = pris en compte ; 4xx (sauf 401/408/429) = opération invalide, aba
 | address.save / address.delete | `{entity: Address}` / `{id}` |
 | account.update | `{name, phone}` (le téléphone ne change que via /me/phone) |
 
-Les formats `Channel`, `Post`, `Order`... sont ceux de `toJson()` dans `lib/data.dart` et `lib/models.dart`.
+Les formats `Channel`, `Post`, `Order`... sont ceux de `toJson()` dans `frontend/lib/data.dart` et `frontend/lib/models.dart`.
 
 ## Snapshot
 `GET /sync/snapshot` renvoie le même format que le fichier local : `channels` (avec `posts`), `orders`, `reviews`, `addresses`, `payouts`, `notices`, `reports` (admin), `favorites`. Les clés absentes ne modifient pas l'état local.
@@ -59,4 +59,4 @@ Les drapeaux propres à l'utilisateur (`mine`, `followed`) sont calculés par le
 - `GET /s/:id`, `GET /p/:id` : pages web d'aperçu (Open Graph) des liens partagés ; `/.well-known/assetlinks.json` et `/.well-known/apple-app-site-association` pour les liens universels.
 - Opération `device.register` `{token, platform}` : enregistrement d'un appareil pour les notifications push (envoi à brancher côté serveur, voir `src/push.js`).
 
-L'implémentation de référence se trouve dans `whatstore-api/` (testée par `npm test`).
+L'implémentation de référence se trouve dans `api/` (testée par `npm test`).

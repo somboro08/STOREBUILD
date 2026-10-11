@@ -1,8 +1,8 @@
 # Configuration Android / iOS
 
-Après `flutter create . --org store.whatstore --project-name whatstore`, ajoute :
+Les commandes Flutter se lancent depuis `frontend/`. Ajoute ensuite les réglages suivants pour les liens et les permissions :
 
-## Android — `android/app/src/main/AndroidManifest.xml`
+## Android — `frontend/android/app/src/main/AndroidManifest.xml`
 Dans `<manifest>` (avant `<application>`) :
 ```xml
 <uses-permission android:name="android.permission.INTERNET"/>
@@ -24,7 +24,7 @@ Liens profonds (https://whatstore.store/s/... et /p/...) : dans la balise `<acti
 ```
 Publie sur ton site `https://whatstore.store/.well-known/assetlinks.json` (empreinte SHA-256 de ta clé de signature).
 
-## iOS — `ios/Runner/Info.plist`
+## iOS — `frontend/ios/Runner/Info.plist`
 ```xml
 <key>NSPhotoLibraryUsageDescription</key><string>Choisir des photos de produits</string>
 <key>NSPhotoLibraryAddUsageDescription</key><string>Enregistrer des images dans ta galerie</string>
@@ -35,6 +35,6 @@ Publie sur ton site `https://whatstore.store/.well-known/assetlinks.json` (empre
 Liens universels : Xcode > Signing & Capabilities > Associated Domains : `applinks:whatstore.store`, et publie `https://whatstore.store/.well-known/apple-app-site-association`.
 
 ## Signature et publication
-- Android : créer un keystore (`keytool -genkey -v -keystore whatstore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias whatstore`), le référencer dans `android/key.properties` et `android/app/build.gradle`, puis `flutter build appbundle`.
+- Android : créer un keystore (`keytool -genkey -v -keystore whatstore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias whatstore`), le référencer dans `frontend/android/key.properties` et `frontend/android/app/build.gradle`, puis lancer `flutter build appbundle` depuis `frontend/`.
 - iOS : compte Apple Developer, identifiant `store.whatstore.whatstore`, puis `flutter build ipa`.
 - Notifications push (plus tard) : Firebase Cloud Messaging ; l'enregistrement du jeton se fera via une opération `device.register`.
