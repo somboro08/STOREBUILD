@@ -19,6 +19,7 @@ class _SearchScreenState extends State<SearchScreen> {
   String? cat;
   String sort = 'pertinence';
   RangeValues range = RangeValues(0, 20000);
+  bool _empty = false;
 
   @override
   Widget build(BuildContext context) {
@@ -27,6 +28,7 @@ class _SearchScreenState extends State<SearchScreen> {
       final p = r.post;
       return normalizeText('${p.title} ${p.text} ${p.category}').contains(n) && (cat == null || p.category == cat) && p.price! >= range.start && (range.end >= 20000 || p.price! <= range.end);
     }).toList();
+    _empty = res.isEmpty;
     if (sort == 'asc') res.sort((a, b) => a.post.price!.compareTo(b.post.price!));
     if (sort == 'desc') res.sort((a, b) => b.post.price!.compareTo(a.post.price!));
     return Scaffold(
@@ -37,7 +39,10 @@ class _SearchScreenState extends State<SearchScreen> {
           autofocus: true,
           textInputAction: TextInputAction.search,
           onChanged: (v) => setState(() => q = v),
-          onSubmitted: app.addSearch,
+          onSubmitted: (v) {
+            app.addSearch(v);
+            if (widget.channel != null && _empty && v.trim().length >= 3) app.logDemand(widget.channel!, v);
+          },
           style: TextStyle(fontSize: 17),
           decoration: InputDecoration(hintText: widget.channel == null ? 'Rechercher un produit' : 'Rechercher dans ${widget.channel!.name}', border: InputBorder.none),
         ),

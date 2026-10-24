@@ -1,5 +1,6 @@
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
+import '../screens/catalog_nav.dart';
 import '../screens/channel_feed_screen.dart';
 import '../screens/product_detail_screen.dart';
 import '../state.dart';
@@ -15,6 +16,12 @@ bool openLink(String raw) {
   if (seg.length < 2) return false;
   if (app.user == null) {
     app.pendingLink = raw;
+    return true;
+  }
+  if (seg[0] == 'q' && seg.length >= 3) {
+    final ctx = navigatorKey.currentContext;
+    if (ctx == null) return false;
+    openScanned(ctx, raw);
     return true;
   }
   if (seg[0] == 's') {

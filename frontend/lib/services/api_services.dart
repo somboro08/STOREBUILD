@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models.dart';
 import '../payment.dart';
+import 'catalog_service.dart';
 import 'interfaces.dart';
 
 /// Squelette de client API : voir docs/API_CONTRACT.md pour les routes attendues. À tester avec ton backend.
@@ -145,4 +146,37 @@ class ApiPaymentService implements PaymentService {
   Future<PaymentResult> pay(PaymentRequest r) => _call('/payments', r);
   @override
   Future<PaymentResult> refund(PaymentRequest r) => _call('/payments/refund', r);
+}
+
+class ApiCatalogService implements CatalogService {
+  final ApiClient api;
+  ApiCatalogService(this.api);
+
+  @override
+  Future<Map<String, dynamic>?> lookup(String channelId, String code) async {
+    try {
+      return await api.send('GET', '/catalog/${Uri.encodeComponent(channelId)}/${Uri.encodeComponent(code)}');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>?> channel(String channelId) async {
+    try {
+      return await api.send('GET', '/channels/${Uri.encodeComponent(channelId)}');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>?> registry(String barcode) async {
+    try {
+      final r = await api.send('GET', '/registry/${Uri.encodeComponent(barcode)}');
+      return r['suggestion'] == null ? null : Map<String, dynamic>.from(r['suggestion']);
+    } catch (_) {
+      return null;
+    }
+  }
 }

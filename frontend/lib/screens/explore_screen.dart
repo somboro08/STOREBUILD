@@ -8,6 +8,7 @@ import '../widgets/helpers.dart';
 import '../widgets/verified_badge.dart';
 import 'channel_feed_screen.dart';
 import 'create_store_screen.dart';
+import 'scan_screen.dart';
 
 /// Explorer : toutes les boutiques, suivi en un tap, ouverture d'un lien collé.
 class ExploreScreen extends StatefulWidget {
@@ -44,7 +45,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Explorer les boutiques', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500)), actions: [IconButton(icon: Icon(Icons.link), tooltip: 'Ouvrir un lien', onPressed: _openLink)]),
+      appBar: AppBar(title: Text('Explorer les boutiques', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500)), actions: [IconButton(icon: Icon(Icons.qr_code_scanner), tooltip: 'Scanner un produit', onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ScanScreen()))), IconButton(icon: Icon(Icons.link), tooltip: 'Ouvrir un lien', onPressed: _openLink)]),
       body: ListenableBuilder(
         listenable: app,
         builder: (context, _) {

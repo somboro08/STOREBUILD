@@ -11,6 +11,7 @@ import 'favorites_screen.dart';
 import 'legal_screen.dart';
 import 'my_stores_screen.dart';
 import 'notifications_screen.dart';
+import 'reservations_screen.dart';
 
 /// Profil : compte, boutiques, adresses, favoris, réglages, légal, suppression du compte.
 class ProfileScreen extends StatelessWidget {
@@ -155,6 +156,7 @@ class ProfileScreen extends StatelessWidget {
             ListTile(leading: Icon(Icons.storefront_outlined, color: C.sub), title: Text('Mes boutiques'), subtitle: Text(app.mine.isEmpty ? 'Aucune boutique' : '${app.mine.length} boutique(s)', style: TextStyle(color: C.sub)), onTap: () => _go(context, MyStoresScreen())),
             ListTile(leading: Icon(Icons.add_business_outlined, color: C.sub), title: Text('Créer une boutique'), onTap: () => _go(context, CreateStoreScreen())),
             ListTile(leading: Icon(Icons.favorite_border, color: C.sub), title: Text('Mes favoris'), trailing: Text('${app.favorites.length}', style: TextStyle(color: C.sub)), onTap: () => _go(context, FavoritesScreen())),
+            ListTile(leading: Icon(Icons.event_available_outlined, color: C.sub), title: Text('Mes réservations'), trailing: Text('${app.reservations.where((r) => r.mine && r.active).length}', style: TextStyle(color: C.sub)), onTap: () => _go(context, ReservationsScreen())),
             ListTile(leading: Icon(Icons.place_outlined, color: C.sub), title: Text('Mes adresses'), trailing: Text('${app.addresses.length}', style: TextStyle(color: C.sub)), onTap: () => _go(context, AddressesScreen())),
             ListTile(
               leading: Badge(isLabelVisible: app.unreadNotices > 0, label: Text('${app.unreadNotices}'), backgroundColor: C.green, textColor: Colors.black, child: Icon(Icons.notifications_none, color: C.sub)),

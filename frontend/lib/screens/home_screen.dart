@@ -11,6 +11,7 @@ import 'favorites_screen.dart';
 import 'my_stores_screen.dart';
 import 'notifications_screen.dart';
 import 'publish_product_screen.dart';
+import 'scan_screen.dart';
 import 'search_screen.dart';
 
 /// Accueil : stores suivis (chaque chaîne = un store).
@@ -25,6 +26,7 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text('Boutiques', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w400)),
         actions: [
+          IconButton(icon: Icon(Icons.qr_code_scanner), tooltip: 'Scanner un produit', onPressed: () => _go(context, ScanScreen())),
           CartButton(),
           ListenableBuilder(
             listenable: app,

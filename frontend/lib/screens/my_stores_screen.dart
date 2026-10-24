@@ -5,6 +5,7 @@ import '../theme.dart';
 import '../widgets/avatar.dart';
 import 'create_store_screen.dart';
 import 'store_dashboard_screen.dart';
+import 'store_hub_screen.dart';
 
 class MyStoresScreen extends StatelessWidget {
   const MyStoresScreen({super.key});
@@ -16,7 +17,8 @@ class MyStoresScreen extends StatelessWidget {
         listenable: app,
         builder: (context, _) {
           final list = app.mine;
-          if (list.isEmpty) {
+          final work = app.worksAt;
+          if (list.isEmpty && work.isEmpty) {
             return Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Text('Tu n\'as pas encore de boutique.', style: TextStyle(color: C.sub, fontSize: 16)),
@@ -37,6 +39,15 @@ class MyStoresScreen extends StatelessWidget {
                 subtitle: Text('${c.posts.where((p) => p.isProduct).length} produits · ${fmtInt(c.followers)} abonnés · ${app.sellerOrders(c).length} commandes', style: TextStyle(color: C.sub, fontSize: 13)),
                 trailing: Icon(Icons.chevron_right, color: C.sub),
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StoreDashboardScreen(channel: c))),
+              ),
+            if (work.isNotEmpty) Padding(padding: EdgeInsets.fromLTRB(16, 18, 16, 4), child: Text('Je travaille dans', style: TextStyle(color: C.sub, fontWeight: FontWeight.w600))),
+            for (final c in work)
+              ListTile(
+                leading: ChannelAvatar(color: c.color, name: c.name, bytes: c.logo, url: c.logoUrl),
+                title: Text(c.name, style: TextStyle(fontWeight: FontWeight.w500)),
+                subtitle: Text(memberRoles[c.role] ?? '', style: TextStyle(color: C.sub, fontSize: 13)),
+                trailing: Icon(Icons.chevron_right, color: C.sub),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StoreHubScreen(channel: c))),
               ),
           ]);
         },

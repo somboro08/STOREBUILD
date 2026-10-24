@@ -108,7 +108,7 @@ class Channel {
   bool mine, followed, muted, verified, delivers;
   double storageMo;
   Uint8List? logo;
-  String? logoUrl, ownerPhone;
+  String? logoUrl, ownerPhone, role; // role : manager | cashier | stock (membre de l'équipe), null sinon
   final List<Post> posts;
   Channel({
     required this.id,
@@ -134,14 +134,20 @@ class Channel {
     this.logo,
     this.logoUrl,
     this.ownerPhone,
+    this.role,
   }) : posts = posts ?? [];
+
+  bool get staff => mine || role != null;
+  bool get canCatalog => mine || role == 'manager' || role == 'stock';
+  bool get canSell => mine || role == 'manager' || role == 'cashier';
+  bool get canManage => mine || role == 'manager';
 
   Map<String, dynamic> toJson(MediaIO io, {bool withPosts = true}) => {
         'id': id, 'name': name, 'description': description, 'category': category, 'zone': zone, 'phone': phone,
         'preview': preview, 'time': time, 'created': created, 'followers': followers, 'unread': unread,
         'color': color.value, 'mine': mine, 'followed': followed, 'muted': muted, 'storageMo': storageMo,
         'verified': verified, 'delivers': delivers, 'deliveryFee': deliveryFee, 'ownerPhone': ownerPhone,
-        'logo': io.saveImage('logo_$id', logo), 'logoUrl': logoUrl,
+        'logo': io.saveImage('logo_$id', logo), 'logoUrl': logoUrl, 'role': role,
         if (withPosts) 'posts': [for (final p in posts) p.toJson(io)],
       };
 
@@ -152,7 +158,7 @@ class Channel {
         color: Color(j['color'] ?? 0xFF455A64), mine: j['mine'] ?? false, followed: j['followed'] ?? true,
         muted: j['muted'] ?? false, storageMo: (j['storageMo'] ?? 0).toDouble(), verified: j['verified'] ?? false,
         delivers: j['delivers'] ?? false, deliveryFee: j['deliveryFee'] ?? 0, ownerPhone: j['ownerPhone'],
-        logo: io.loadImage(j['logo']), logoUrl: j['logoUrl'],
+        logo: io.loadImage(j['logo']), logoUrl: j['logoUrl'], role: j['role'],
         posts: [for (final p in (j['posts'] as List? ?? [])) Post.fromJson(Map<String, dynamic>.from(p), io)],
       );
 }

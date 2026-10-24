@@ -6,6 +6,7 @@ import '../theme.dart';
 import '../widgets/avatar.dart';
 import '../widgets/helpers.dart';
 import '../widgets/verified_badge.dart';
+import 'store_hub_screen.dart';
 import 'channel_feed_screen.dart';
 import 'create_store_screen.dart';
 import 'orders_screen.dart';
@@ -42,8 +43,22 @@ class StoreDashboardScreen extends StatelessWidget {
   Widget _products(BuildContext context) {
     final list = channel.posts.where((p) => p.isProduct).toList();
     final ann = channel.posts.length - list.length;
-    if (list.isEmpty) return Center(child: Text('Aucun produit. Appuie sur « Publier ».', style: TextStyle(color: C.sub)));
+    final cat = app.itemsOf(channel, all: true);
+    final alerts = cat.where((i) => i.low || i.out).length;
     return ListView(padding: EdgeInsets.only(bottom: 90), children: [
+      Container(
+        margin: EdgeInsets.fromLTRB(14, 12, 14, 6),
+        decoration: BoxDecoration(color: C.bubble, borderRadius: BorderRadius.circular(14)),
+        child: ListTile(
+          leading: Icon(Icons.inventory_2_outlined, color: C.green, size: 30),
+          title: Text('Magasin physique', style: TextStyle(fontWeight: FontWeight.w600)),
+          subtitle: Text('${cat.length} produit(s)${alerts > 0 ? ' · $alerts alerte(s) de stock' : ''}\nCaisse, catalogue, stock, achats, équipe', style: TextStyle(color: alerts > 0 ? Colors.orange : C.sub, fontSize: 13)),
+          isThreeLine: true,
+          trailing: Icon(Icons.chevron_right),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StoreHubScreen(channel: channel))),
+        ),
+      ),
+      if (list.isEmpty) Padding(padding: EdgeInsets.all(30), child: Center(child: Text('Aucun produit en ligne. Appuie sur « Publier » ou publie depuis le catalogue.', textAlign: TextAlign.center, style: TextStyle(color: C.sub)))),
       if (ann > 0) Padding(padding: EdgeInsets.fromLTRB(16, 10, 16, 0), child: Text('$ann annonce(s) publiée(s) · appui long dans la boutique pour les modifier', style: TextStyle(color: C.sub, fontSize: 12.5))),
       for (final p in list)
         ListTile(

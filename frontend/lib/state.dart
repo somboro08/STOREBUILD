@@ -6,13 +6,17 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'brand.dart';
+import 'catalog_models.dart';
 import 'data.dart';
 import 'models.dart';
 import 'payment.dart';
+import 'services/image_embed.dart';
+import 'services/launcher.dart';
 import 'services/local_store.dart';
 import 'services/services.dart';
 import 'theme.dart';
 
+export 'catalog_models.dart';
 export 'models.dart';
 
 /// État global + persistance locale + file de synchronisation (voir docs/API_CONTRACT.md).
@@ -27,6 +31,16 @@ class AppState extends ChangeNotifier {
   final List<Report> reports = [];
   final List<SyncOp> queue = [];
   final List<String> searchHistory = [];
+  final List<CatalogGroup> groups = [];
+  final List<CatalogItem> items = [];
+  final List<StockMovement> movements = [];
+  final List<CatalogCode> blankCodes = [];
+  final List<Sale> sales = [];
+  final List<Purchase> purchases = [];
+  final List<Reservation> reservations = [];
+  final List<Member> members = [];
+  final List<DemandTerm> demand = [];
+  final Set<String> alertItems = {};
   final Set<String> favorites = {}, pinned = {};
   AppUser? user;
   bool notifications = true, onboarded = false, online = true;
@@ -57,6 +71,7 @@ class AppState extends ChangeNotifier {
       online = !(await Connectivity().checkConnectivity()).contains(ConnectivityResult.none);
       Connectivity().onConnectivityChanged.listen((r) => setOnline(!r.contains(ConnectivityResult.none)));
     } catch (_) {}
+    expireReservations();
     if (Services.remote) Future.microtask(() async {
       await flush();
       await pull();
@@ -78,6 +93,16 @@ class AppState extends ChangeNotifier {
         'favorites': favorites.toList(),
         'pinned': pinned.toList(),
         'search': searchHistory,
+        'groups': [for (final x in groups) x.toJson()],
+        'items': [for (final x in items) x.toJson(io)],
+        'movements': [for (final x in movements) x.toJson()],
+        'blankCodes': [for (final x in blankCodes) x.toJson()],
+        'sales': [for (final x in sales) x.toJson()],
+        'purchases': [for (final x in purchases) x.toJson()],
+        'reservations': [for (final x in reservations) x.toJson()],
+        'members': [for (final x in members) x.toJson()],
+        'demand': [for (final x in demand) x.toJson()],
+        'alerts': alertItems.toList(),
       };
 
   List<Map<String, dynamic>> _list(dynamic v) => [for (final x in (v as List? ?? [])) Map<String, dynamic>.from(x)];
@@ -110,6 +135,16 @@ class AppState extends ChangeNotifier {
     if (has('favorites')) favorites..clear()..addAll(List<String>.from(j['favorites']));
     if (has('pinned')) pinned..clear()..addAll(List<String>.from(j['pinned']));
     if (has('search')) searchHistory..clear()..addAll(List<String>.from(j['search']));
+    if (has('groups')) groups..clear()..addAll(_list(j['groups']).map(CatalogGroup.fromJson));
+    if (has('items')) items..clear()..addAll(_list(j['items']).map((x) => CatalogItem.fromJson(x, io)));
+    if (has('movements')) movements..clear()..addAll(_list(j['movements']).map(StockMovement.fromJson));
+    if (has('blankCodes')) blankCodes..clear()..addAll(_list(j['blankCodes']).map(CatalogCode.fromJson));
+    if (has('sales')) sales..clear()..addAll(_list(j['sales']).map(Sale.fromJson));
+    if (has('purchases')) purchases..clear()..addAll(_list(j['purchases']).map(Purchase.fromJson));
+    if (has('reservations')) reservations..clear()..addAll(_list(j['reservations']).map(Reservation.fromJson));
+    if (has('members')) members..clear()..addAll(_list(j['members']).map(Member.fromJson));
+    if (has('demand')) demand..clear()..addAll(_list(j['demand']).map(DemandTerm.fromJson));
+    if (has('alerts')) alertItems..clear()..addAll(List<String>.from(j['alerts']));
   }
 
   void _scheduleSave() {
@@ -131,7 +166,7 @@ class AppState extends ChangeNotifier {
   // ------------------------------------------------------------ synchronisation
   int get pending => queue.length;
 
-  void _log(String type, Map<String, dynamic> payload) {
+  void log(String type, Map<String, dynamic> payload) {
     queue.add(SyncOp('${DateTime.now().microsecondsSinceEpoch}', type, payload));
     Future.microtask(flush);
   }
@@ -179,6 +214,16 @@ class AppState extends ChangeNotifier {
       if (c == null) return;
       if (c.logo != null && c.logoUrl == null) c.logoUrl = await Services.media.upload(bytes: c.logo, kind: 'logo');
       op.payload['entity'] = c.toJson(NoMediaIO(), withPosts: false);
+    }
+    if (op.type == 'catalog.item.save' && op.payload['entity'] != null) {
+      final it = itemById(op.payload['entity']['id']);
+      if (it == null) return;
+      for (var i = it.imageUrls.length; i < it.images.length; i++) {
+        final u = await Services.media.upload(bytes: it.images[i], kind: 'post');
+        if (u == null) break;
+        it.imageUrls.add(u);
+      }
+      op.payload['entity'] = it.toJson(NoMediaIO());
     }
   }
 
@@ -253,7 +298,7 @@ class AppState extends ChangeNotifier {
     user = AppUser(name, phone);
     _prefs?.setString('user_name', name);
     _prefs?.setString('user_phone', phone);
-    _log('account.update', {'name': name, 'phone': phone});
+    log('account.update', {'name': name, 'phone': phone});
     notifyListeners();
   }
 
@@ -267,6 +312,17 @@ class AppState extends ChangeNotifier {
   Future<void> deleteAccount() async {
     await Services.auth.deleteAccount();
     final name = user?.name;
+    final mineIds = channels.where((c) => c.mine).map((c) => c.id).toSet();
+    items.removeWhere((i) => mineIds.contains(i.channelId));
+    groups.removeWhere((g) => mineIds.contains(g.channelId));
+    movements.removeWhere((m) => mineIds.contains(m.channelId));
+    blankCodes.removeWhere((b) => mineIds.contains(b.channelId));
+    sales.removeWhere((x) => mineIds.contains(x.channelId));
+    purchases.removeWhere((x) => mineIds.contains(x.channelId));
+    reservations.clear();
+    members.removeWhere((x) => mineIds.contains(x.channelId));
+    demand.removeWhere((x) => mineIds.contains(x.channelId));
+    alertItems.clear();
     channels.removeWhere((c) => c.mine);
     reviews.removeWhere((r) => r.author == name);
     for (final l in [orders, cart, addresses, payouts, notices, reports, queue, searchHistory]) {
@@ -318,7 +374,7 @@ class AppState extends ChangeNotifier {
     c.followed = !c.followed;
     c.followers = max(0, c.followers + (c.followed ? 1 : -1));
     if (!c.followed) pinned.remove(c.id);
-    _log('store.follow', {'channelId': c.id, 'followed': c.followed});
+    log('store.follow', {'channelId': c.id, 'followed': c.followed});
     notifyListeners();
   }
 
@@ -355,7 +411,7 @@ class AppState extends ChangeNotifier {
       created: '${n.day.toString().padLeft(2, '0')}/${n.month.toString().padLeft(2, '0')}/${n.year}',
     );
     channels.insert(0, c);
-    _log('store.create', {'entity': c.toJson(NoMediaIO(), withPosts: false)});
+    log('store.create', {'entity': c.toJson(NoMediaIO(), withPosts: false)});
     notifyListeners();
     return c;
   }
@@ -377,19 +433,19 @@ class AppState extends ChangeNotifier {
     }
     c.delivers = delivers;
     c.deliveryFee = deliveryFee;
-    _log('store.update', {'entity': c.toJson(NoMediaIO(), withPosts: false)});
+    log('store.update', {'entity': c.toJson(NoMediaIO(), withPosts: false)});
     notifyListeners();
   }
 
   void setVerified(Channel c, bool v) {
     c.verified = v;
-    _log('store.verify', {'channelId': c.id, 'verified': v});
+    log('store.verify', {'channelId': c.id, 'verified': v});
     notifyListeners();
   }
 
   void report(Channel c, String reason) {
     reports.add(Report(c.id, reason, user?.name ?? ''));
-    _log('report.create', {'channelId': c.id, 'reason': reason});
+    log('report.create', {'channelId': c.id, 'reason': reason});
     notifyListeners();
   }
 
@@ -407,7 +463,7 @@ class AppState extends ChangeNotifier {
     c.posts.add(p);
     c.preview = p.title ?? (p.text.isEmpty ? 'Nouvelle publication' : p.text);
     c.time = p.time;
-    _log('post.create', {'channelId': c.id, 'postId': p.id, 'entity': p.toJson(NoMediaIO())});
+    log('post.create', {'channelId': c.id, 'postId': p.id, 'entity': p.toJson(NoMediaIO())});
     notifyListeners();
   }
 
@@ -428,7 +484,7 @@ class AppState extends ChangeNotifier {
       p.extra = extra;
       p.extraUrls = [];
     }
-    p.stock = stock;
+    if (itemByPost(p.id) == null) p.stock = stock; // stock géré par le catalogue si le produit y est lié
     if (variants != null) p.variants = variants;
     if (videoPath != null && videoPath != p.videoPath) {
       p.videoPath = videoPath;
@@ -437,13 +493,13 @@ class AppState extends ChangeNotifier {
     }
     if (p.stock != null && p.stock! > 0 && p.sold) p.sold = false;
     final c = channelOf(p);
-    _log('post.update', {'channelId': c?.id, 'postId': p.id, 'entity': p.toJson(NoMediaIO())});
+    log('post.update', {'channelId': c?.id, 'postId': p.id, 'entity': p.toJson(NoMediaIO())});
     notifyListeners();
   }
 
   void toggleSold(Post p) {
     p.sold = !p.sold;
-    _log('post.update', {'channelId': channelOf(p)?.id, 'postId': p.id, 'entity': p.toJson(NoMediaIO())});
+    log('post.update', {'channelId': channelOf(p)?.id, 'postId': p.id, 'entity': p.toJson(NoMediaIO())});
     notifyListeners();
   }
 
@@ -452,13 +508,13 @@ class AppState extends ChangeNotifier {
     cart.removeWhere((l) => l.post == p);
     favorites.remove(p.id);
     c.preview = c.posts.isEmpty ? '' : (c.posts.last.title ?? c.posts.last.text);
-    _log('post.delete', {'channelId': c.id, 'postId': p.id});
+    log('post.delete', {'channelId': c.id, 'postId': p.id});
     notifyListeners();
   }
 
   void toggleFavorite(Post p) {
     favorites.contains(p.id) ? favorites.remove(p.id) : favorites.add(p.id);
-    _log('favorite.set', {'postId': p.id, 'value': favorites.contains(p.id)});
+    log('favorite.set', {'postId': p.id, 'value': favorites.contains(p.id)});
     notifyListeners();
   }
 
@@ -471,7 +527,7 @@ class AppState extends ChangeNotifier {
       p.myReaction = e;
       if (!p.reactions.contains(e)) p.reactions.insert(0, e);
     }
-    _log('post.react', {'channelId': channelOf(p)?.id, 'postId': p.id, 'emoji': p.myReaction});
+    log('post.react', {'channelId': channelOf(p)?.id, 'postId': p.id, 'emoji': p.myReaction});
     notifyListeners();
   }
 
@@ -531,20 +587,20 @@ class AppState extends ChangeNotifier {
     if (existing != null) {
       existing.label = label;
       existing.text = text;
-      _log('address.save', {'entity': existing.toJson()});
+      log('address.save', {'entity': existing.toJson()});
       notifyListeners();
       return existing;
     }
     final a = Address('a${DateTime.now().microsecondsSinceEpoch}', label, text);
     addresses.add(a);
-    _log('address.save', {'entity': a.toJson()});
+    log('address.save', {'entity': a.toJson()});
     notifyListeners();
     return a;
   }
 
   void deleteAddress(Address a) {
     addresses.remove(a);
-    _log('address.delete', {'id': a.id});
+    log('address.delete', {'id': a.id});
     notifyListeners();
   }
 
@@ -582,6 +638,7 @@ class AppState extends ChangeNotifier {
       if (p.stock != null) {
         p.stock = max(0, p.stock! - l.qty);
         if (p.stock == 0) p.sold = true;
+        _mirrorPostToItem(p, -l.qty, 'vente_en_ligne');
       }
     }
     orders.insert(0, o);
@@ -590,7 +647,7 @@ class AppState extends ChangeNotifier {
     for (final c in o.channels) {
       if (c.mine) _notice('Nouvelle commande ${o.ref}', '${o.buyerName} · ${fmtInt(o.totalFor(c))} FCFA');
     }
-    _log('order.create', {'entity': o.toJson()});
+    log('order.create', {'entity': o.toJson()});
     notifyListeners();
     return o;
   }
@@ -598,7 +655,7 @@ class AppState extends ChangeNotifier {
   void setStatus(Order o, OrderStatus s) {
     o.status = s;
     _notice('Commande ${o.ref}', 'Statut : ${s.label}');
-    _log('order.status', {'ref': o.ref, 'status': s.index, 'refunded': o.refunded});
+    log('order.status', {'ref': o.ref, 'status': s.index, 'refunded': o.refunded});
     notifyListeners();
   }
 
@@ -610,6 +667,7 @@ class AppState extends ChangeNotifier {
       if (p.stock != null) {
         p.stock = p.stock! + l.qty;
         p.sold = false;
+        _mirrorPostToItem(p, l.qty, 'retour');
       }
     }
     _notice('Commande ${o.ref} annulée', 'Remboursement en cours');
@@ -617,7 +675,7 @@ class AppState extends ChangeNotifier {
     final r = await paymentService.refund(PaymentRequest(o.provider, o.phone, o.total, o.ref));
     o.refunded = r.ok;
     _notice(r.ok ? 'Remboursement effectué' : 'Remboursement en attente', 'Commande ${o.ref} · ${fmtInt(o.total)} FCFA');
-    _log('order.status', {'ref': o.ref, 'status': o.status.index, 'refunded': o.refunded});
+    log('order.status', {'ref': o.ref, 'status': o.status.index, 'refunded': o.refunded});
     notifyListeners();
   }
 
@@ -630,7 +688,7 @@ class AppState extends ChangeNotifier {
     final r = Review('r${DateTime.now().microsecondsSinceEpoch}', l.channel.id, l.post.id, user?.name ?? '', rating, text.trim());
     reviews.insert(0, r);
     o.reviewed.add(l.post.id);
-    _log('review.create', {'entity': r.toJson()});
+    log('review.create', {'entity': r.toJson()});
     notifyListeners();
   }
 
@@ -657,10 +715,425 @@ class AppState extends ChangeNotifier {
     final p = Payout('p${DateTime.now().microsecondsSinceEpoch}', c.id, amount, phone);
     payouts.insert(0, p);
     _notice('Retrait demandé', '${fmtInt(amount)} FCFA vers $phone');
-    _log('payout.request', {'entity': p.toJson()});
+    log('payout.request', {'entity': p.toJson()});
     notifyListeners();
     return null;
   }
+  // ------------------------------------------------------------ catalogue physique & stock
+  void changed() => notifyListeners();
+
+  static const _codeAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sans 0/O/1/I
+
+  /// Code court unique dans la boutique, généré sans connexion.
+  String newCode(String channelId) {
+    final r = Random.secure();
+    while (true) {
+      final c = String.fromCharCodes([for (var i = 0; i < 6; i++) _codeAlphabet.codeUnitAt(r.nextInt(_codeAlphabet.length))]);
+      final used = items.any((i) => i.channelId == channelId && i.code == c) || blankCodes.any((b) => b.channelId == channelId && b.code == c);
+      if (!used) return c;
+    }
+  }
+
+  String labelUrl(Channel c, String code) => '${Brand.baseUrl}/q/${c.id}/$code';
+
+  CatalogItem? itemById(String id) {
+    for (final i in items) {
+      if (i.id == id) return i;
+    }
+    return null;
+  }
+
+  CatalogItem? itemByPost(String postId) {
+    for (final i in items) {
+      if (i.postId == postId && i.active) return i;
+    }
+    return null;
+  }
+
+  List<CatalogGroup> groupsOf(Channel c, String? parentId) =>
+      (groups.where((g) => g.channelId == c.id && g.parentId == parentId).toList())..sort((a, b) => normalizeText(a.name).compareTo(normalizeText(b.name)));
+
+  List<CatalogItem> itemsOf(Channel c, {String? groupId, bool all = false}) =>
+      (items.where((i) => i.channelId == c.id && i.active && (all || i.groupId == groupId)).toList())..sort((a, b) => normalizeText(a.title).compareTo(normalizeText(b.title)));
+
+  /// Nombre de produits dans un sous-catalogue, sous-dossiers compris.
+  int countIn(Channel c, String groupId) {
+    var n = items.where((i) => i.channelId == c.id && i.active && i.groupId == groupId).length;
+    for (final g in groupsOf(c, groupId)) {
+      n += countIn(c, g.id);
+    }
+    return n;
+  }
+
+  /// Arbre aplati (avec profondeur) pour les listes déroulantes.
+  List<MapEntry<CatalogGroup, int>> groupTree(Channel c, [String? parent, int depth = 0]) => [
+        for (final g in groupsOf(c, parent)) ...[MapEntry(g, depth), ...groupTree(c, g.id, depth + 1)],
+      ];
+
+  String groupPath(CatalogGroup? g) {
+    if (g == null) return 'Racine';
+    final names = <String>[g.name];
+    var p = g.parentId;
+    while (p != null) {
+      final x = groups.where((e) => e.id == p).firstOrNull;
+      if (x == null) break;
+      names.insert(0, x.name);
+      p = x.parentId;
+    }
+    return names.join(' › ');
+  }
+
+  CatalogGroup saveGroup(Channel c, String name, {CatalogGroup? existing, String? parentId}) {
+    final g = existing ?? CatalogGroup('g${DateTime.now().microsecondsSinceEpoch}', c.id, name.trim(), parentId);
+    g.name = name.trim();
+    if (existing == null) groups.add(g);
+    log('catalog.group.save', {'entity': g.toJson()});
+    notifyListeners();
+    return g;
+  }
+
+  /// Supprime un sous-catalogue : ses produits et sous-dossiers remontent d'un niveau.
+  void deleteGroup(CatalogGroup g) {
+    for (final x in groups.where((e) => e.parentId == g.id)) {
+      x.parentId = g.parentId;
+      log('catalog.group.save', {'entity': x.toJson()});
+    }
+    for (final i in items.where((e) => e.groupId == g.id)) {
+      i.groupId = g.parentId;
+      log('catalog.item.save', {'entity': i.toJson(NoMediaIO())});
+    }
+    groups.remove(g);
+    log('catalog.group.delete', {'id': g.id, 'channelId': g.channelId});
+    notifyListeners();
+  }
+
+  List<String> createBlankCodes(Channel c, int n) {
+    final out = <String>[];
+    for (var i = 0; i < n; i++) {
+      final code = newCode(c.id);
+      blankCodes.add(CatalogCode(c.id, code));
+      out.add(code);
+    }
+    log('catalog.codes.create', {'channelId': c.id, 'codes': out});
+    notifyListeners();
+    return out;
+  }
+
+  /// Crée ou met à jour un produit du catalogue. initialStock : stock de départ (création seulement).
+  void saveItem(CatalogItem item, {int initialStock = 0}) {
+    final isNew = !items.contains(item);
+    if (isNew) items.add(item);
+    blankCodes.removeWhere((b) => b.channelId == item.channelId && b.code == item.code);
+    log('catalog.item.save', {'entity': item.toJson(NoMediaIO())});
+    if (isNew && initialStock > 0) {
+      moveStock(item, initialStock, 'initial', mirrorPost: false);
+    }
+    if (item.postId != null) _mirrorItemToPost(item, full: true);
+    notifyListeners();
+  }
+
+  /// Archive le produit (il disparaît du catalogue ; son code n'est plus utilisé).
+  void deleteItem(CatalogItem item) {
+    final c = channelById(item.channelId);
+    if (item.postId != null && c != null) unpublishItem(item, c);
+    item.active = false;
+    log('catalog.item.delete', {'id': item.id, 'channelId': item.channelId});
+    notifyListeners();
+  }
+
+  /// Rattache une étiquette déjà imprimée à un produit existant.
+  void reassignCode(CatalogItem item, String code) {
+    item.code = code;
+    blankCodes.removeWhere((b) => b.channelId == item.channelId && b.code == code);
+    log('catalog.item.save', {'entity': item.toJson(NoMediaIO())});
+    notifyListeners();
+  }
+
+  /// Mouvement de stock (delta > 0 entrée, < 0 sortie). Le stock ne descend jamais sous 0.
+  StockMovement moveStock(CatalogItem it, int delta, String kind, {String note = '', bool mirrorPost = true, bool sync = true}) {
+    final before = it.stock;
+    it.stock = max(0, before + delta);
+    final m = StockMovement('m${DateTime.now().microsecondsSinceEpoch}', it.id, it.channelId, it.stock - before, kind, note, user?.name ?? '', it.stock);
+    movements.insert(0, m);
+    if (movements.length > 2000) movements.removeLast();
+    if (mirrorPost && it.postId != null) _mirrorItemToPost(it);
+    if (before <= 0 && it.stock > 0 && alertItems.remove(it.id)) _notice('De retour : ${it.title}', 'Ce produit est de nouveau disponible.');
+    if (it.out && before > 0) {
+      _notice('Rupture : ${it.title}', 'Le stock est épuisé.');
+    } else if (it.low && before > it.lowStock) {
+      _notice('Stock faible : ${it.title}', 'Il en reste ${it.stock}.');
+    }
+    if (sync) log('stock.move', {'id': m.id, 'channelId': it.channelId, 'itemId': it.id, 'delta': delta, 'kind': kind, 'note': note});
+    notifyListeners();
+    return m;
+  }
+
+  /// Fixe le stock à une valeur comptée (inventaire / correction).
+  void setStockTo(CatalogItem it, int target, {String note = ''}) {
+    final d = target - it.stock;
+    if (d != 0) moveStock(it, d, 'inventaire', note: note);
+  }
+
+  /// Stock catalogue -> publication en ligne liée.
+  void _mirrorItemToPost(CatalogItem it, {bool full = false}) {
+    final p = _postById(it.postId!);
+    if (p == null) return;
+    p.stock = it.stock;
+    p.sold = it.stock <= 0;
+    if (full) {
+      p.title = it.title;
+      p.price = it.price;
+      p.category = it.category ?? p.category;
+      p.text = _postText(it);
+      if (it.images.isNotEmpty) {
+        p.bytes = it.images.first;
+        p.extra = it.images.skip(1).toList();
+      }
+      if (it.imageUrls.isNotEmpty) {
+        p.imageUrl = it.imageUrls.first;
+        p.extraUrls = it.imageUrls.skip(1).toList();
+      }
+      final c = channelOf(p);
+      log('post.update', {'channelId': c?.id, 'postId': p.id, 'entity': p.toJson(NoMediaIO())});
+    }
+  }
+
+  /// Vente / retour en ligne -> catalogue (la publication est déjà à jour).
+  void _mirrorPostToItem(Post p, int delta, String kind) {
+    final it = itemByPost(p.id);
+    if (it != null) moveStock(it, delta, kind, mirrorPost: false);
+  }
+
+  String _postText(CatalogItem it) => [it.description, if (it.usage.isNotEmpty) 'Utilisation : ${it.usage}'].where((s) => s.trim().isNotEmpty).join('\n\n');
+
+  /// Publie le produit dans la boutique en ligne (même stock).
+  Post publishItem(CatalogItem it, Channel c, String category) {
+    it.category = category;
+    final p = Post(
+      id: 'u${DateTime.now().microsecondsSinceEpoch}', type: PostType.image, time: nowHm(), title: it.title, price: it.price,
+      category: category, stock: it.stock, sold: it.stock <= 0, text: _postText(it).isEmpty ? it.title : _postText(it),
+      bytes: it.images.isEmpty ? null : it.images.first, extra: it.images.length > 1 ? it.images.skip(1).toList() : null,
+      imageUrl: it.imageUrls.isEmpty ? null : it.imageUrls.first, extraUrls: it.imageUrls.length > 1 ? it.imageUrls.skip(1).toList() : null,
+    );
+    publish(c, p);
+    it.postId = p.id;
+    log('catalog.item.save', {'entity': it.toJson(NoMediaIO())});
+    notifyListeners();
+    return p;
+  }
+
+  void unpublishItem(CatalogItem it, Channel c) {
+    final p = it.postId == null ? null : _postById(it.postId!);
+    it.postId = null;
+    if (p != null) deletePost(c, p);
+    log('catalog.item.save', {'entity': it.toJson(NoMediaIO())});
+    notifyListeners();
+  }
+
+  List<CatalogItem> lowStockOf(Channel c) => itemsOf(c, all: true).where((i) => i.low || i.out).toList();
+
+  /// Interprète un scan : lien d'étiquette (/q/<boutique>/<code>), code court ou code-barres existant.
+  ScanResult resolveScan(String raw) {
+    final r = raw.trim();
+    String? chId;
+    var code = r;
+    final u = Uri.tryParse(r);
+    if (u != null && u.pathSegments.length >= 3 && u.pathSegments[0] == 'q') {
+      chId = u.pathSegments[1];
+      code = u.pathSegments[2];
+    }
+    final up = code.toUpperCase();
+    for (final i in items) {
+      if (!i.active || (chId != null && i.channelId != chId)) continue;
+      if (i.code == up || i.barcodes.contains(code) || i.barcodes.contains(r)) {
+        return ScanResult(ScanKind.item, channel: channelById(i.channelId), item: i, code: i.code);
+      }
+    }
+    for (final b in blankCodes) {
+      if ((chId == null || b.channelId == chId) && b.code == up) {
+        return ScanResult(ScanKind.blank, channel: channelById(b.channelId), code: up);
+      }
+    }
+    return ScanResult(ScanKind.unknown, code: code);
+  }
+
+  /// Comme resolveScan, avec consultation du serveur pour une étiquette d'une boutique inconnue.
+  Future<ScanResult> resolveScanRemote(String raw) async {
+    final u = Uri.tryParse(raw.trim());
+    if (u == null || u.pathSegments.length < 3 || u.pathSegments[0] != 'q') return ScanResult(ScanKind.unknown, code: raw);
+    final chId = u.pathSegments[1], code = u.pathSegments[2].toUpperCase();
+    final data = await Services.catalog.lookup(chId, code);
+    if (data == null) return ScanResult(ScanKind.unknown, code: code);
+    if (data['blank'] == true) return ScanResult(ScanKind.blank, channel: channelById(chId), code: code);
+    final it = CatalogItem.fromJson(Map<String, dynamic>.from(data['item']), NoMediaIO());
+    var ch = channelById(chId);
+    if (ch == null) {
+      final cj = await Services.catalog.channel(chId);
+      if (cj != null) {
+        ch = Channel.fromJson(cj, NoMediaIO());
+        ch.followed = false;
+        channels.add(ch);
+      }
+    }
+    if (ch == null) return ScanResult(ScanKind.unknown, code: code);
+    items.removeWhere((x) => x.id == it.id);
+    items.add(it);
+    notifyListeners();
+    return ScanResult(ScanKind.item, channel: ch, item: it, code: code);
+  }
+
+  // ------------------------------------------------------------ caisse, achats, équipe, réservations
+  List<Channel> get worksAt => channels.where((c) => !c.mine && c.role != null).toList();
+
+  /// Vente en magasin : retire le stock et enregistre la vente (une seule opération de synchro).
+  Sale createSale(Channel c, List<SaleLine> lines, {String method = 'Espèces', String note = '', String customerPhone = ''}) {
+    final s = Sale('s${DateTime.now().microsecondsSinceEpoch}', c.id, user?.name ?? '', method, note, customerPhone, lines,
+        lines.fold(0, (a, l) => a + l.total), lines.fold(0, (a, l) => a + l.unitCost * l.qty));
+    for (final l in lines) {
+      final it = itemById(l.itemId);
+      if (it != null) moveStock(it, -l.qty, 'vente', note: 'Caisse ${s.id}', sync: false);
+    }
+    sales.insert(0, s);
+    log('sale.create', {'entity': s.toJson()});
+    notifyListeners();
+    return s;
+  }
+
+  void voidSale(Sale s) {
+    if (s.voided) return;
+    for (final l in s.lines) {
+      final it = itemById(l.itemId);
+      if (it != null) moveStock(it, l.qty, 'retour', note: 'Annulation vente ${s.id}', sync: false);
+    }
+    s.voided = true;
+    log('sale.void', {'id': s.id, 'channelId': s.channelId});
+    notifyListeners();
+  }
+
+  List<Sale> salesOf(Channel c, {DateTime? since}) =>
+      sales.where((s) => s.channelId == c.id && (since == null || !s.date.isBefore(since))).toList()..sort((a, b) => b.date.compareTo(a.date));
+
+  /// Frais répartis au prorata de la valeur de chaque ligne ; coût du produit = moyenne pondérée avec l'ancien stock.
+  List<PurchaseLine> landedLines(List<PurchaseLine> input, int extra) {
+    final totalValue = input.fold(0, (a, l) => a + l.qty * l.unitCost);
+    final totalQty = input.fold(0, (a, l) => a + l.qty);
+    return [
+      for (final l in input)
+        PurchaseLine(l.itemId, l.qty, l.unitCost,
+            (l.unitCost + (totalValue > 0 ? extra * (l.qty * l.unitCost) / totalValue : extra * l.qty / totalQty) / l.qty).round()),
+    ];
+  }
+
+  Purchase savePurchase(Channel c, String supplier, int extra, String note, List<PurchaseLine> input) {
+    final lines = landedLines(input, extra);
+    for (final l in lines) {
+      final it = itemById(l.itemId);
+      if (it == null) continue;
+      it.cost = it.cost > 0 && it.stock + l.qty > 0 ? ((it.stock * it.cost + l.qty * l.landed) / (it.stock + l.qty)).round() : l.landed;
+      moveStock(it, l.qty, 'entree', note: 'Achat $supplier'.trim(), sync: false);
+    }
+    final p = Purchase('pu${DateTime.now().microsecondsSinceEpoch}', c.id, supplier, note, extra, lines);
+    purchases.insert(0, p);
+    log('purchase.create', {'entity': p.toJson()});
+    notifyListeners();
+    return p;
+  }
+
+  List<Member> membersOf(Channel c) => members.where((m) => m.channelId == c.id).toList();
+
+  void inviteMember(Channel c, String phone, String name, String role) {
+    final p = normalizePhone(phone);
+    members.removeWhere((m) => m.channelId == c.id && m.phone == p);
+    members.add(Member(c.id, p, name.trim(), role));
+    log('team.invite', {'channelId': c.id, 'phone': phone, 'name': name.trim(), 'role': role});
+    notifyListeners();
+  }
+
+  void removeMember(Channel c, Member m) {
+    members.remove(m);
+    log('team.remove', {'channelId': c.id, 'phone': m.phone});
+    notifyListeners();
+  }
+
+  Reservation reserve(CatalogItem it, Channel c, int qty, String name, String phone) {
+    final now = DateTime.now();
+    final r = Reservation('r${now.microsecondsSinceEpoch}', c.id, it.id, it.title, qty, name, phone, 'pending', now, now.add(Duration(hours: Brand.reservationHours)), mine: true);
+    reservations.insert(0, r);
+    if (c.staff) moveStock(it, -qty, 'reservation', note: 'Réservation ${r.id}', sync: false);
+    log('reservation.create', {'id': r.id, 'itemId': it.id, 'qty': qty, 'name': name, 'phone': phone});
+    notifyListeners();
+    return r;
+  }
+
+  void setReservation(Reservation r, String status) {
+    if (r.status == status || !r.active) return;
+    final c = channelById(r.channelId);
+    final it = itemById(r.itemId);
+    final staff = c?.staff == true && it != null;
+    if (status == 'cancelled' && staff) moveStock(it, r.qty, 'retour', note: 'Annulation réservation', sync: false);
+    if (status == 'collected' && staff) {
+      sales.insert(0, Sale('s_${r.id}', r.channelId, user?.name ?? '', 'Espèces', 'Réservation ${r.id}', r.phone, [SaleLine(it.id, it.title, r.qty, it.price, it.cost)], it.price * r.qty, it.cost * r.qty));
+    }
+    r.status = status;
+    log('reservation.status', {'id': r.id, 'status': status});
+    notifyListeners();
+  }
+
+  /// Réservations échues : le stock réservé est restitué (le serveur fait de même de son côté).
+  void expireReservations() {
+    final now = DateTime.now();
+    var changed = false;
+    for (final r in reservations.where((r) => r.active && r.expires.isBefore(now)).toList()) {
+      final it = itemById(r.itemId);
+      if (channelById(r.channelId)?.staff == true && it != null) moveStock(it, r.qty, 'retour', note: 'Réservation expirée', sync: false);
+      r.status = 'expired';
+      changed = true;
+    }
+    if (changed) notifyListeners();
+  }
+
+  void toggleAlert(CatalogItem it) {
+    alertItems.contains(it.id) ? alertItems.remove(it.id) : alertItems.add(it.id);
+    log('alert.subscribe', {'itemId': it.id, 'value': alertItems.contains(it.id)});
+    notifyListeners();
+  }
+
+  /// Recherche d'un client qui n'a rien donné dans une boutique : signal de demande pour le vendeur.
+  void logDemand(Channel c, String term) {
+    final t = normalizeText(term).trim();
+    if (t.length < 3) return;
+    final ex = demand.where((d) => d.channelId == c.id && d.term == t).firstOrNull;
+    if (ex != null) {
+      ex.count++;
+      ex.last = DateTime.now();
+    } else {
+      demand.add(DemandTerm(c.id, t, 1, DateTime.now()));
+    }
+    log('demand.log', {'channelId': c.id, 'term': t});
+    notifyListeners();
+  }
+
+  // ------------------------------------------------------------ recherche par photo
+  Future<void> ensureSigs(CatalogItem it) async {
+    if (it.sigs.length == it.images.length) return;
+    it.sigs = [for (final b in it.images) await imageEmbedder.embed(b)];
+  }
+
+  List<MapEntry<CatalogItem, double>> searchByPhoto(List<double> sig, {Channel? channel, int limit = 5}) {
+    final out = <MapEntry<CatalogItem, double>>[];
+    for (final i in items) {
+      if (!i.active || (channel != null && i.channelId != channel.id)) continue;
+      var best = 0.0;
+      for (final s in i.sigs) {
+        final v = imageEmbedder.similarity(sig, s);
+        if (v > best) best = v;
+      }
+      if (best > 0) out.add(MapEntry(i, best));
+    }
+    out.sort((a, b) => b.value.compareTo(a.value));
+    return out.take(limit).toList();
+  }
+
 }
 
 final app = AppState();

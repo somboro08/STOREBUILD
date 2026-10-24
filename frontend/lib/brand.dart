@@ -21,6 +21,9 @@ class Brand {
   /// Numéros ayant accès à l'espace administration (modération, vérification des boutiques).
   static const adminPhones = <String>[];
 
+  /// Durée d'une réservation en magasin (heures) — même valeur que RESERVATION_HOURS côté API.
+  static const reservationHours = 24;
+
   static const supportPhone = '+22901000000';
   static const supportEmail = 'support@whatstore.store';
 }
